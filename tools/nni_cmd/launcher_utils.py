@@ -119,6 +119,10 @@ def validate_kubeflow_operators(experiment_config):
             if experiment_config.get('kubeflowConfig').get('azureStorage') is None:
                 print_error('please set azureStorage configuration!')
                 exit(1)
+        elif experiment_config.get('kubeflowConfig').get('storage') == 'local':
+            if experiment_config.get('kubeflowConfig').get('local') is None:
+                print_error('please set LocalStorage configuration!')
+                exit(1)
         elif experiment_config.get('kubeflowConfig').get('storage') is None:
             if experiment_config.get('kubeflowConfig').get('azureStorage'):
                 print_error('please set storage type!')

@@ -35,8 +35,8 @@ import {
 import { delay, generateParamFileName, getExperimentRootDir, uniqueString } from '../../../common/utils';
 import { KubeflowClusterConfigNFS, KubeflowClusterConfigAzure,
      KubeflowTrialConfigPytorch, KubeflowTrialConfigTensorflow, KubeflowClusterConfigFactory, KubeflowTrialConfigFactory,
-     KubeflowTrialConfig, KubeflowClusterConfig } from './kubeflowConfig';
-import { NFSConfig } from '../kubernetesConfig'
+     KubeflowTrialConfig, KubeflowClusterConfig, KubeflowClusterConfigLocal } from './kubeflowConfig';
+import { NFSConfig, LocalStorage } from '../kubernetesConfig'
 import { KubernetesTrialJobDetail } from '../kubernetesData';
 import { KubeflowJobRestServer } from './kubeflowJobRestServer';
 import { validateCodeDir } from '../../common/util';
@@ -95,7 +95,7 @@ class KubeflowTrainingService extends KubernetesTrainingService implements Kuber
             this.kubernetesRestServerPort = restServer.clusterRestServerPort;
         }
         const trialJobId: string = uniqueString(5);
-        const trialWorkingFolder: string = path.join(this.CONTAINER_MOUNT_PATH, 'nni', getExperimentId(), trialJobId);
+        const trialWorkingFolder: string = path.join(this.CONTAINER_MOUNT_PATH, 'nni/tmp', getExperimentId(), trialJobId);
         const kubeflowJobName = `nni-exp-${this.experimentId}-trial-${trialJobId}`.toLowerCase();
         const curTrialSequenceId: number = this.generateSequenceId();
         const trialLocalTempFolder: string = path.join(getExperimentRootDir(), 'trials-local', trialJobId);
@@ -126,7 +126,7 @@ class KubeflowTrainingService extends KubernetesTrainingService implements Kuber
     }
     
     /**
-     * upload code files to nfs or azureStroage
+     * upload code files to nfs or azureStroage or local
      * @param trialJobId 
      * @param trialLocalTempFolder 
      * return: trialJobOutputUrl
@@ -140,7 +140,8 @@ class KubeflowTrainingService extends KubernetesTrainingService implements Kuber
 
         assert(!this.kubeflowClusterConfig.storage 
             || this.kubeflowClusterConfig.storage === 'azureStorage' 
-            || this.kubeflowClusterConfig.storage === 'nfs');
+            || this.kubeflowClusterConfig.storage === 'nfs'
+            || this.kubeflowClusterConfig.storage === 'local');
 
         if(this.kubeflowClusterConfig.storage === 'azureStorage') {
             try{
@@ -153,7 +154,7 @@ class KubeflowTrainingService extends KubernetesTrainingService implements Kuber
                 this.log.error(error);
                 return Promise.reject(error);
             }
-        } else if(this.kubeflowClusterConfig.storage === 'nfs' || this.kubeflowClusterConfig.storage === undefined) {
+        } else if(this.kubeflowClusterConfig.storage === 'nfs') {
             let nfsKubeflowClusterConfig: KubeflowClusterConfigNFS = <KubeflowClusterConfigNFS>this.kubeflowClusterConfig;
             // Creat work dir for current trial in NFS directory 
             await cpp.exec(`mkdir -p ${this.trialLocalNFSTempFolder}/nni/${getExperimentId()}/${trialJobId}`);
@@ -162,6 +163,18 @@ class KubeflowTrainingService extends KubernetesTrainingService implements Kuber
         
             const nfsConfig: NFSConfig = nfsKubeflowClusterConfig.nfs;
             trialJobOutputUrl = `nfs://${nfsConfig.server}:${path.join(nfsConfig.path, 'nni', getExperimentId(), trialJobId, 'output')}`
+        } else if(this.kubeflowClusterConfig.storage === 'local' || this.kubeflowClusterConfig.storage === undefined) {
+            
+            let localKubeflowClusterConfig: KubeflowClusterConfigLocal = <KubeflowClusterConfigLocal>this.kubeflowClusterConfig;
+            // Creat work dir for current trial in local directory 
+            await cpp.exec(`mkdir -p ${this.trialLocalsTempFolder}/nni/${getExperimentId()}/${trialJobId}`);
+            // Copy code files from local dir to local mounted dir
+            await cpp.exec(`cp -r ${trialLocalTempFolder}/* ${this.trialLocalsTempFolder}/nni/${getExperimentId()}/${trialJobId}/.`);
+        
+            const localConfig: LocalStorage = localKubeflowClusterConfig.local;
+            await cpp.exec(`mkdir -p ${path.join(localConfig.path, 'nni/tmp/', getExperimentId(), '/', trialJobId)}`);
+            await cpp.exec(`cp -r ${trialLocalTempFolder}/* ${path.join(localConfig.path, 'nni/tmp/', getExperimentId(), '/', trialJobId)}`);
+            trialJobOutputUrl = `${path.join(localConfig.path, 'nni', getExperimentId(), trialJobId, 'output')}`;
         }
 
         return Promise.resolve(trialJobOutputUrl);
@@ -296,7 +309,12 @@ class KubeflowTrainingService extends KubernetesTrainingService implements Kuber
                         nfsKubeflowClusterConfig.nfs.server,
                         nfsKubeflowClusterConfig.nfs.path
                     );
-                } 
+                } else if(this.kubeflowClusterConfig.storageType === 'local') {
+                    let localKubeflowClusterConfig = <KubeflowClusterConfigLocal>this.kubeflowClusterConfig;
+                    await this.createLocalStorage(
+                        localKubeflowClusterConfig.local.path
+                    );
+                }  
                 this.kubernetesCRDClient = KubeflowOperatorClient.generateOperatorClient(this.kubeflowClusterConfig.operator,
                                                                                      this.kubeflowClusterConfig.apiVersion);
                 break;
@@ -430,7 +448,7 @@ class KubeflowTrainingService extends KubernetesTrainingService implements Kuber
                         readonly: false
                     }
             }])
-        }else {
+        }else if(this.kubeflowClusterConfig.storageType === 'nfs'){
             let nfsKubeflowClusterConfig: KubeflowClusterConfigNFS = <KubeflowClusterConfigNFS> this.kubeflowClusterConfig;
             volumeSpecMap.set('nniVolumes', [
             {
@@ -438,6 +456,15 @@ class KubeflowTrainingService extends KubernetesTrainingService implements Kuber
                 nfs: {
                     server: `${nfsKubeflowClusterConfig.nfs.server}`,
                     path: `${nfsKubeflowClusterConfig.nfs.path}`
+                }
+            }])
+        } else {
+            let localKubeflowClusterConfig: KubeflowClusterConfigLocal = <KubeflowClusterConfigLocal> this.kubeflowClusterConfig;
+            volumeSpecMap.set('nniVolumes', [
+            {
+                name: 'nni-vol',
+                hostPath:{
+                    path: `${localKubeflowClusterConfig.local.path}` 
                 }
             }])
         }

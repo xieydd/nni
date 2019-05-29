@@ -32,12 +32,12 @@ import {
     TrialJobDetail, NNIManagerIpConfig
 } from '../../../common/trainingService';
 import { delay, generateParamFileName, getExperimentRootDir, uniqueString } from '../../../common/utils';
-import { NFSConfig } from '../kubernetesConfig'
+import { NFSConfig, LocalStorage } from '../kubernetesConfig'
 import { KubernetesTrialJobDetail } from '../kubernetesData';
 import { validateCodeDir } from '../../common/util';
 import { AzureStorageClientUtility } from '../azureStorageClientUtils';
 import { KubernetesTrainingService } from '../kubernetesTrainingService';
-import { FrameworkControllerTrialConfig, FrameworkControllerClusterConfig, FrameworkControllerClusterConfigAzure, FrameworkControllerClusterConfigNFS, 
+import { FrameworkControllerTrialConfig, FrameworkControllerClusterConfig, FrameworkControllerClusterConfigAzure, FrameworkControllerClusterConfigNFS, FrameworkControllerClusterConfigLocal, 
     FrameworkControllerClusterConfigFactory} from './frameworkcontrollerConfig';
 import { FrameworkControllerJobRestServer } from './frameworkcontrollerJobRestServer';
 import { FrameworkControllerClient } from './frameworkcontrollerApiClient';
@@ -162,6 +162,16 @@ class FrameworkControllerTrainingService extends KubernetesTrainingService imple
         
             const nfsConfig: NFSConfig = nfsFrameworkControllerClusterConfig.nfs;
             trialJobOutputUrl = `nfs://${nfsConfig.server}:${path.join(nfsConfig.path, 'nni', getExperimentId(), trialJobId, 'output')}`
+        } else if(this.fcClusterConfig.storageType === 'local') {
+            let localFrameworkControllerClusterConfig: FrameworkControllerClusterConfigLocal = <FrameworkControllerClusterConfigLocal>this.fcClusterConfig; 
+            // Creat work dir for current trial in local directory 
+            await cpp.exec(`mkdir -p ${this.trialLocalsTempFolder}/nni/${getExperimentId()}/${trialJobId}`);
+            // Copy code files from local dir to Local mounted dir
+            await cpp.exec(`cp -r ${trialLocalTempFolder}/* ${this.trialLocalsTempFolder}/nni/${getExperimentId()}/${trialJobId}/.`);
+            const LocalStorage: LocalStorage = localFrameworkControllerClusterConfig.local;
+            await cpp.exec(`mkdir -p ${path.join(LocalStorage.path, 'nni/tmp/',getExperimentId(),'/',trialJobId)}`);
+            await cpp.exec(`cp -r ${trialLocalTempFolder}/* ${path.join(LocalStorage.path, 'nni/tmp/',getExperimentId(),'/',trialJobId)}`);
+            trialJobOutputUrl = `${path.join(LocalStorage.path, 'nni', getExperimentId(), trialJobId, 'output')}`;
         }
         return Promise.resolve(trialJobOutputUrl);
     }
@@ -252,6 +262,11 @@ class FrameworkControllerTrainingService extends KubernetesTrainingService imple
                     await this.createNFSStorage(
                         nfsFrameworkControllerClusterConfig.nfs.server,
                         nfsFrameworkControllerClusterConfig.nfs.path
+                    );
+                } else if(this.fcClusterConfig.storageType === 'local') {
+                    let localFrameworkControllerClusterConfig = <FrameworkControllerClusterConfigLocal>this.fcClusterConfig;
+                    await this.createLocalStorage(
+                        localFrameworkControllerClusterConfig.local.path
                     );
                 } 
                 this.kubernetesCRDClient = FrameworkControllerClient.generateFrameworkControllerClient();
@@ -381,7 +396,7 @@ class FrameworkControllerTrainingService extends KubernetesTrainingService imple
                 name: 'frameworkbarrier-volume',
                 emptyDir: {}
             }])
-        }else {
+        }else if(this.fcClusterConfig.storageType === 'nfs'){
             let frameworkcontrollerClusterConfigNFS: FrameworkControllerClusterConfigNFS = <FrameworkControllerClusterConfigNFS> this.fcClusterConfig;
             volumeSpecMap.set('nniVolumes', [
             {
@@ -394,8 +409,20 @@ class FrameworkControllerTrainingService extends KubernetesTrainingService imple
                 name: 'frameworkbarrier-volume',
                 emptyDir: {}
             }])
+        }else {
+            let frameworkcontrollerClusterConfigLocal: FrameworkControllerClusterConfigLocal = <FrameworkControllerClusterConfigLocal> this.fcClusterConfig;
+            volumeSpecMap.set('nniVolumes', [
+            {
+                name: 'nni-vol',
+                hostpath: {
+                    path: `${frameworkcontrollerClusterConfigLocal.local.path}`
+                }
+            },{
+                name: 'frameworkbarrier-volume',
+                emptyDir: {}
+            }])
         }
-        
+
         let containers = [
             {
                 name: 'framework',

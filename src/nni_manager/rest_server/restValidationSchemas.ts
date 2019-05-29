@@ -103,6 +103,9 @@ export namespace ValidationSchemas {
                     server: joi.string().min(1).required(),
                     path: joi.string().min(1).required()
                 }),
+                local: joi.Object(
+                    {path: joi.string().min(1).required()}
+                ),
                 keyVault: joi.object({
                     vaultName: joi.string().regex(/^([0-9]|[a-z]|[A-Z]|-){1,127}$/),
                     name: joi.string().regex(/^([0-9]|[a-z]|[A-Z]|-){1,127}$/)
@@ -119,6 +122,9 @@ export namespace ValidationSchemas {
                     server: joi.string().min(1).required(),
                     path: joi.string().min(1).required()
                 }),
+                local: joi.Object(
+                    {path: joi.string().min(1).required()}
+                ),
                 keyVault: joi.object({
                     vaultName: joi.string().regex(/^([0-9]|[a-z]|[A-Z]|-){1,127}$/),
                     name: joi.string().regex(/^([0-9]|[a-z]|[A-Z]|-){1,127}$/)

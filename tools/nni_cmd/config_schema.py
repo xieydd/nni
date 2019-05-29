@@ -241,7 +241,14 @@ kubeflow_config_schema = {
     'kubeflowConfig':Or({
         'operator': setChoice('operator', 'tf-operator', 'pytorch-operator'),
         'apiVersion': setType('apiVersion', str),
-        Optional('storage'): setChoice('storage', 'nfs', 'azureStorage'),
+        Optional('storage'): setChoice('storage', 'nfs', 'azureStorage', 'local'),
+        'local': {
+            'path': setType('path', str)
+        }
+    },{
+        'operator': setChoice('operator', 'tf-operator', 'pytorch-operator'),
+        'apiVersion': setType('apiVersion', str),
+        Optional('storage'): setChoice('storage', 'nfs', 'azureStorage', 'local'),
         'nfs': {
             'server': setType('server', str),
             'path': setType('path', str)
@@ -249,7 +256,7 @@ kubeflow_config_schema = {
     },{
         'operator': setChoice('operator', 'tf-operator', 'pytorch-operator'),
         'apiVersion': setType('apiVersion', str),
-        Optional('storage'): setChoice('storage', 'nfs', 'azureStorage'),
+        Optional('storage'): setChoice('storage', 'nfs', 'azureStorage', 'local'),
         'keyVault': {
             'vaultName': And(Regex('([0-9]|[a-z]|[A-Z]|-){1,127}'),\
                          error='ERROR: vaultName format error, vaultName support using (0-9|a-z|A-Z|-)'),
@@ -286,14 +293,20 @@ frameworkcontroller_trial_schema = {
 
 frameworkcontroller_config_schema = {
     'frameworkcontrollerConfig':Or({
-        Optional('storage'): setChoice('storage', 'nfs', 'azureStorage'),
+        Optional('storage'): setChoice('storage', 'nfs', 'azureStorage', 'local'),
+        Optional('serviceAccountName'): setType('serviceAccountName', str),
+        'local': {
+            'path': setType('path', str)
+        }
+    },{
+        Optional('storage'): setChoice('storage', 'nfs', 'azureStorage', 'local'),
         Optional('serviceAccountName'): setType('serviceAccountName', str),
         'nfs': {
             'server': setType('server', str),
             'path': setType('path', str)
         }
     },{
-        Optional('storage'): setChoice('storage', 'nfs', 'azureStorage'),
+        Optional('storage'): setChoice('storage', 'nfs', 'azureStorage', 'local'),
         Optional('serviceAccountName'): setType('serviceAccountName', str),
         'keyVault': {
             'vaultName': And(Regex('([0-9]|[a-z]|[A-Z]|-){1,127}'),\

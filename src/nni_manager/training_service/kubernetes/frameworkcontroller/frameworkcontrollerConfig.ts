@@ -21,7 +21,7 @@
 import * as assert from 'assert';
 
 import { KubernetesTrialConfig, KubernetesTrialConfigTemplate, KubernetesClusterConfigAzure,
-     KubernetesClusterConfigNFS, NFSConfig, KubernetesStorageKind, keyVaultConfig, AzureStorage, KubernetesClusterConfig,
+     KubernetesClusterConfigNFS, KubernetesClusterConfigLocal, NFSConfig, KubernetesStorageKind, keyVaultConfig, AzureStorage, LocalStorage,KubernetesClusterConfig,
     StorageConfig } from '../kubernetesConfig'
 
 export class FrameworkAttemptCompletionPolicy {
@@ -92,6 +92,30 @@ export class FrameworkControllerClusterConfigNFS extends KubernetesClusterConfig
     }
 }
 
+export class FrameworkControllerClusterConfigLocal extends KubernetesClusterConfigLocal {
+    public readonly serviceAccountName: string;
+    constructor(
+            serviceAccountName: string,
+            apiVersion: string,
+            local: LocalStorage ,
+            storage?: KubernetesStorageKind
+        ) {
+        super(apiVersion, local, storage);
+        this.serviceAccountName = serviceAccountName;
+    }
+
+    public static getInstance(jsonObject: object): FrameworkControllerClusterConfigLocal {
+        let kubeflowClusterConfigObjectLocal = <FrameworkControllerClusterConfigLocal>jsonObject;
+        assert (kubeflowClusterConfigObjectLocal !== undefined)
+        return new FrameworkControllerClusterConfigLocal(
+            kubeflowClusterConfigObjectLocal.serviceAccountName,
+            kubeflowClusterConfigObjectLocal.apiVersion,
+            kubeflowClusterConfigObjectLocal.local,
+            kubeflowClusterConfigObjectLocal.storage
+        );
+    }
+}
+
 export class FrameworkControllerClusterConfigAzure extends KubernetesClusterConfigAzure {
     public readonly serviceAccountName: string;
     
@@ -127,8 +151,10 @@ export class FrameworkControllerClusterConfigFactory {
         }
          if(storageConfig.storage && storageConfig.storage === 'azureStorage') {
             return FrameworkControllerClusterConfigAzure.getInstance(jsonObject);
-         } else if (storageConfig.storage === undefined || storageConfig.storage === 'nfs') {
+         } else if (storageConfig.storage === 'nfs') {
             return FrameworkControllerClusterConfigNFS.getInstance(jsonObject);
+         } else if (storageConfig.storage === undefined || storageConfig.storage === 'local') {
+             return FrameworkControllerClusterConfigLocal.getInstance(jsonObject)
          }
          throw new Error(`Invalid json object ${jsonObject}`);
     }

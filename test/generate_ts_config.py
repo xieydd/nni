@@ -49,6 +49,8 @@ def update_training_service_config(args):
             config[args.ts]['kubeflowConfig']['nfs']['server'] = args.nfs_server
         if args.nfs_path is not None:
             config[args.ts]['kubeflowConfig']['nfs']['path'] = args.nfs_path
+        if args.local_path is not None:
+            config[args.ts]['kubeflowConfig']['local']['path'] = args.local_path 
         if args.keyvault_vaultname is not None:
             config[args.ts]['kubeflowConfig']['keyVault']['vaultName'] = args.keyvault_vaultname
         if args.keyvault_name is not None:
@@ -99,6 +101,7 @@ if __name__ == '__main__':
     # args for kubeflow
     parser.add_argument("--nfs_server", type=str)
     parser.add_argument("--nfs_path", type=str)
+    parser.add_argument("--local_path", type=str)
     parser.add_argument("--keyvault_vaultname", type=str)
     parser.add_argument("--keyvault_name", type=str)
     parser.add_argument("--azs_account", type=str)

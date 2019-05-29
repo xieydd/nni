@@ -47,6 +47,7 @@ abstract class KubernetesTrainingService {
     protected readonly trialJobsMap: Map<string, KubernetesTrialJobDetail>;
     /**  experiment root dir in NFS */
     protected readonly trialLocalNFSTempFolder: string;
+    protected readonly trialLocalsTempFolder: string;
     protected stopping: boolean = false;
     protected experimentId! : string;
     protected nextTrialSequenceId: number;
@@ -69,6 +70,7 @@ abstract class KubernetesTrainingService {
         this.metricsEmitter = new EventEmitter();
         this.trialJobsMap = new Map<string, KubernetesTrialJobDetail>();
         this.trialLocalNFSTempFolder = path.join(getExperimentRootDir(), 'trials-nfs-tmp');
+        this.trialLocalsTempFolder = path.join(getExperimentRootDir(), 'trials-local-tmp');
         this.experimentId = getExperimentId();      
         this.nextTrialSequenceId = -1;
         this.CONTAINER_MOUNT_PATH = '/tmp/mount';
@@ -222,6 +224,11 @@ abstract class KubernetesTrainingService {
         }
         return Promise.resolve();
     }
+
+    protected async createLocalStorage(Path: string): Promise<void> {
+        await cpp.exec(`mkdir -p ${this.trialLocalsTempFolder}`);
+        return Promise.resolve();
+    } 
 
     public async cancelTrialJob(trialJobId: string, isEarlyStopped: boolean = false): Promise<void> {
         const trialJobDetail : KubernetesTrialJobDetail | undefined =  this.trialJobsMap.get(trialJobId);

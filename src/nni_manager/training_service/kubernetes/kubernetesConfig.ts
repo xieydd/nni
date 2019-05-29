@@ -19,7 +19,7 @@
 
 'use strict';
 
-export type KubernetesStorageKind = 'nfs' | 'azureStorage';
+export type KubernetesStorageKind = 'nfs' | 'azureStorage' | 'local';
 import { MethodNotImplementedError } from '../../common/errors';
 
 export abstract class KubernetesClusterConfig {
@@ -70,6 +70,33 @@ export class KubernetesClusterConfigNFS extends KubernetesClusterConfig {
     }
 }
 
+export class KubernetesClusterConfigLocal extends KubernetesClusterConfig {
+    public readonly local: LocalStorage;
+
+    constructor(
+            apiVersion: string,
+            local: LocalStorage,
+            storage?: KubernetesStorageKind
+        ) {
+        super(apiVersion, storage);
+        this.local = local;
+    }
+
+    public get storageType(): KubernetesStorageKind{
+        return 'local';
+    }
+
+    public static getInstance(jsonObject: object): KubernetesClusterConfigLocal {
+        let kubernetesClusterConfigObjectLocal = <KubernetesClusterConfigLocal>jsonObject;
+        return new KubernetesClusterConfigLocal(
+            kubernetesClusterConfigObjectLocal.apiVersion,
+            kubernetesClusterConfigObjectLocal.local,
+            kubernetesClusterConfigObjectLocal.storage
+        );
+    }
+}
+
+
 export class KubernetesClusterConfigAzure extends KubernetesClusterConfig {
     public readonly keyVault: keyVaultConfig;
     public readonly azureStorage: AzureStorage;
@@ -107,8 +134,10 @@ export class KubernetesClusterConfigFactory {
          switch(storageConfig.storage) {
             case 'azureStorage':
                 return KubernetesClusterConfigAzure.getInstance(jsonObject);
-            case  'nfs' || undefined :
+            case 'nfs':
                 return KubernetesClusterConfigNFS.getInstance(jsonObject);
+            case 'local' || undefined:
+                return KubernetesClusterConfigLocal.getInstance(jsonObject);
          }
          throw new Error(`Invalid json object ${jsonObject}`);
     }
@@ -144,6 +173,20 @@ export class keyVaultConfig {
         this.name = name;
     }
 }
+
+/**
+ * Local Storage Service
+ */
+export class LocalStorage {
+    /**The Machine Local share to storage files*/
+    /** Local Dir name*/
+    public readonly path : string;
+
+    constructor(path : string) {
+        this.path = path;
+    }
+ }
+
 
 /**
  * Azure Storage Service

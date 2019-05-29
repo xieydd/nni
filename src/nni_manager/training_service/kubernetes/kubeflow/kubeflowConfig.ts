@@ -21,7 +21,7 @@
 
 import * as assert from 'assert';
 import { KubernetesClusterConfigAzure, KubernetesClusterConfigNFS, KubernetesStorageKind, NFSConfig, AzureStorage, keyVaultConfig,
-        KubernetesTrialConfig, KubernetesTrialConfigTemplate, StorageConfig, KubernetesClusterConfig } from '../kubernetesConfig'
+        KubernetesTrialConfig, KubernetesTrialConfigTemplate, StorageConfig, KubernetesClusterConfig, KubernetesClusterConfigLocal, LocalStorage } from '../kubernetesConfig'
 import { MethodNotImplementedError } from '../../../common/errors';
 
 /** operator types that kubeflow supported */
@@ -66,6 +66,34 @@ export class KubeflowClusterConfigNFS extends KubernetesClusterConfigNFS {
     }
 }
 
+export class KubeflowClusterConfigLocal extends KubernetesClusterConfigLocal {
+    public readonly operator: KubeflowOperator;
+    constructor(
+            operator: KubeflowOperator, 
+            apiVersion: string, 
+            local: LocalStorage,
+            storage?: KubernetesStorageKind
+        ) {
+        super(apiVersion, local, storage);
+        this.operator = operator;
+    }
+
+    public get storageType(): KubernetesStorageKind {
+        return 'local';
+    }
+
+    public static getInstance(jsonObject: object): KubeflowClusterConfigLocal {
+        let kubeflowClusterConfigObjectLocal = <KubeflowClusterConfigLocal>jsonObject;
+        assert (kubeflowClusterConfigObjectLocal !== undefined)
+        return new KubeflowClusterConfigLocal(
+            kubeflowClusterConfigObjectLocal.operator,
+            kubeflowClusterConfigObjectLocal.apiVersion,
+            kubeflowClusterConfigObjectLocal.local,
+            kubeflowClusterConfigObjectLocal.storage
+        );
+    }
+}
+
 export class KubeflowClusterConfigAzure extends KubernetesClusterConfigAzure{
     public readonly operator: KubeflowOperator;
     
@@ -105,8 +133,10 @@ export class KubeflowClusterConfigFactory {
         }
          if(storageConfig.storage && storageConfig.storage === 'azureStorage') {
             return KubeflowClusterConfigAzure.getInstance(jsonObject);
-         } else if (storageConfig.storage === undefined || storageConfig.storage === 'nfs') {
+         } else if (storageConfig.storage === 'nfs') {
             return KubeflowClusterConfigNFS.getInstance(jsonObject);
+         } else if (storageConfig.storage === undefined || storageConfig.storage === 'local') {
+             return KubeflowClusterConfigLocal.getInstance(jsonObject)
          }
          throw new Error(`Invalid json object ${jsonObject}`);
     }
